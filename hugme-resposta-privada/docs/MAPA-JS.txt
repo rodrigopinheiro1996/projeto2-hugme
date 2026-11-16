@@ -1,0 +1,27 @@
+Página de referência do projeto:
+https://app.hugme.com.br/app.html#/tickets/minha-lista/p1/104654755/
+
+=== MAPA JS ROD BOT (4 passos) ===
+URL: https://app.hugme.com.br/app.html#/tickets/minha-lista/p1/104614558/
+
+[Passo #1] acesso rapido, ID de origem
+Elemento: <input>
+JS Path: document.querySelector("#input-id-reclamacao")
+Attrs: id="input-id-reclamacao" | class="ng-valid ng-dirty" | type="text" | placeholder="Pesquise por ID de Hugme ou da Origem"
+
+[Passo #2] resposta privada
+Elemento: <a> | Texto: "Resposta privada"
+JS Path: document.querySelector("li.btn_resp_privada_tiqt > a.pointer")
+Lista semelhante: a.pointer (2 na tela)
+
+[Passo #3] buscar por contato, (cola mensagem pronta para envio)
+Elemento: <button> | Texto: "Busca por contato"
+JS Path: document.querySelector("ticket-view-response[type=\\"'ra-private-reply'\\"] > div.response-container > div.response-btn-reply > button.btn-model:nth-child(3)")
+Lista semelhante: button.btn-model (8 na tela)
+Ação observada no HTML: ng-click="triggerSetReply($index, reply.mensagem)"
+
+[Passo #4] enviar resposta
+Elemento: <button> | Texto: "Responder privado"
+JS Path: document.querySelector("ticket-view-response[type=\\"'ra-private-reply'\\"] > div.response-container > div.buttons-response > button.btn-undo")
+Lista semelhante: button.btn-undo (2 na tela)
+Ação observada no HTML: ng-click="triggerSubmitSendPrivate(tiqt.message, $event, uploadedFiles, item, status);"

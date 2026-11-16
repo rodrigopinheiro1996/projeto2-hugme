@@ -1,0 +1,76 @@
+<!doctype html>
+<html lang="pt-BR">
+<head><meta charset="utf-8"><title>HugMe (simulado para testes)</title>
+<style>body{font:14px system-ui;margin:0;padding:12px 480px 12px 12px}textarea{width:420px;height:160px}.msg{border:1px solid #ccc;padding:6px;margin:4px 0}.loading{color:#999}</style>
+</head>
+<body>
+<!-- Página SIMULADA. Reproduz só a estrutura que os quatro JS Paths do mapa exigem. Nenhum dado real. -->
+<header>
+ <input id="input-id-reclamacao" class="ng-valid ng-dirty" type="text" placeholder="Pesquise por ID de Hugme ou da Origem">
+ <a class="pointer" href="#/sair">Sair</a>
+</header>
+<main id="ticket"><p>Nenhum ticket aberto.</p></main>
+<script>
+// Controle dos testes: window.__mock = {map:{origem:hugme}, scenario:'ok'|'noconfirm'|'slowswitch'|'wrongticket'}
+window.__mock = window.__mock || { map: {}, scenario: 'ok' };
+window.__sent = []; window.__errors = []; window.__events = [];
+let rendered = '', message = '';
+const ev = (type, extra = {}) => window.__events.push({ type, hash: location.hash, rendered, ...extra });
+const hashTicket = () => (/\/(\d+)\/?$/.exec(location.hash) || [])[1] || '';
+const MODEL_TEXT = 'Olá, {nome}. Modelo padrão Busca por contato carregado pelo HugMe.';
+
+function renderTicket(hugme, origem) {
+  rendered = hugme;
+  const t = document.getElementById('ticket');
+  t.innerHTML = `<div class="ticket-head">Ticket <b>${hugme}</b> · Origem <span class="origem">${origem}</span></div>
+  <ul class="acoes"><li class="btn_resp_publica_tiqt"><a class="pointer-pub">Resposta pública</a></li><li class="btn_resp_privada_tiqt"><a class="pointer">Resposta privada</a></li></ul>
+  <ticket-view-response type="'ra-public-reply'"><div class="response-container"><div class="buttons-response"><button class="btn-undo">Responder público</button></div></div></ticket-view-response>
+  <div id="private-slot"></div><div id="timeline"></div>`;
+  t.querySelector('li.btn_resp_privada_tiqt > a').onclick = () => {
+    if (rendered !== hashTicket()) window.__errors.push('Resposta privada clicada com ticket desatualizado: tela ' + rendered + ', URL ' + hashTicket());
+    ev('privateClick'); openPrivate();
+  };
+}
+function openPrivate() {
+  setTimeout(() => {
+    const slot = document.getElementById('private-slot');
+    slot.innerHTML = `<ticket-view-response type="'ra-private-reply'"><div class="response-container">
+      <div class="response-btn-reply">${['Modelo inicial', 'Pedido de dados', 'Busca por contato', 'Encerramento', 'Prazo', 'Retorno', 'Agradecimento', 'Outro'].map(n => `<button class="btn-model">${n}</button>`).join('')}</div>
+      <textarea ng-model="tiqt.message"></textarea>
+      <div class="buttons-response"><button class="btn-cancel">Cancelar</button><button class="btn-undo" disabled>Responder privado</button></div>
+    </div></ticket-view-response>`;
+    const ta = slot.querySelector('textarea'), send = slot.querySelector('button.btn-undo');
+    message = '';
+    // Como o ng-model: o valor interno só muda com o evento input.
+    ta.addEventListener('input', () => { message = ta.value; send.disabled = !message; });
+    slot.querySelectorAll('button.btn-model')[2].onclick = () => { ev('modelClick'); setTimeout(() => { ta.value = MODEL_TEXT; message = ta.value; send.disabled = false; }, 300); };
+    send.onclick = () => {
+      window.__sent.push({ ticket: rendered, url: hashTicket(), message, textarea: ta.value }); ev('sendClick');
+      if (window.__mock.scenario === 'noconfirm') return;
+      setTimeout(() => {
+        const div = document.createElement('div'); div.className = 'msg privada';
+        message.split('\n').forEach((l, i) => { if (i) div.append(document.createElement('br')); div.append(l); });
+        document.getElementById('timeline').append(div); slot.innerHTML = '';
+      }, 500);
+    };
+  }, 250);
+}
+const input = document.getElementById('input-id-reclamacao');
+input.addEventListener('keyup', e => {
+  if (e.keyCode !== 13) return;
+  const origem = input.value.trim(); ev('search', { origem });
+  let hugme = window.__mock.map[origem];
+  if (!hugme) return;
+  if (window.__mock.scenario === 'wrongticket' && window.__mock.wrong && window.__mock.wrong[origem]) hugme = window.__mock.wrong[origem];
+  if (window.__mock.scenario === 'slowswitch') {
+    // A URL troca logo; o conteúdo antigo continua na tela um tempo, depois some e o novo aparece.
+    location.hash = '#/tickets/minha-lista/p1/' + hugme + '/';
+    setTimeout(() => { rendered = ''; document.getElementById('ticket').innerHTML = '<p class="loading">Carregando…</p>'; }, 1500);
+    setTimeout(() => renderTicket(hugme, origem), 2600);
+    return;
+  }
+  setTimeout(() => { location.hash = '#/tickets/minha-lista/p1/' + hugme + '/'; renderTicket(hugme, origem); }, 300);
+});
+</script>
+</body>
+</html>

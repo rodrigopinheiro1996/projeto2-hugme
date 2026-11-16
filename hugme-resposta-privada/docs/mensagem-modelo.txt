@@ -1,0 +1,8 @@
+Olá, [Nome do Cliente]! Aqui é a {Especialista}, do Reclame Aqui.
+
+Tentei falar com você agora pouco pelo WhatsApp, no número {xx xxxx-xxxx}, sem sucesso.
+Sua reclamação já está comigo e quero resolvê-la o quanto antes, só preciso alinhar alguns pontos diretamente com você.
+Pode me indicar o melhor contato e horário para essa conversa? Responder este e-mail já garante que eu avance com seu caso.
+
+Fico no aguardo!
+{Especialista}
