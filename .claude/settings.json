@@ -1,0 +1,14 @@
+{
+  "extraKnownMarketplaces": {
+    "omc": {
+      "source": { "source": "github", "repo": "Yeachan-Heo/oh-my-claudecode" }
+    },
+    "n8n-mcp-skills": {
+      "source": { "source": "github", "repo": "czlonkowski/n8n-skills" }
+    }
+  },
+  "enabledPlugins": {
+    "oh-my-claudecode@omc": true,
+    "n8n-mcp-skills@n8n-mcp-skills": true
+  }
+}
