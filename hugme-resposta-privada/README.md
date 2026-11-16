@@ -17,12 +17,13 @@ Favorito que lê uma planilha `.xlsx` no navegador e envia, um ticket por vez, a
 ## Uso rápido
 
 1. **Instalar:** abra `dist/instalar-hugme-resposta-privada.html` no Chrome ou Edge e arraste o botão “HugMe Resposta privada” para a barra de favoritos.
-2. **Abrir o painel:** entre no HugMe (`app.hugme.com.br`) com seu login, abra a tela de tickets e clique no favorito.
+2. **Abrir o painel:** entre no HugMe (`app.hugme.com.br`) com seu login, abra a tela de tickets e clique no favorito. Arraste o painel pela barra superior; dois cliques na barra o devolvem ao canto direito.
 3. **Importar:** em “1 · Planilha”, escolha o `.xlsx`. Confira a tabela de colunas: ela mostra a grafia encontrada no arquivo para C, Q, W e AA.
-4. **Conferir a prévia:** clique em cada linha para ver o texto completo. Linhas “Revisar especialista” precisam da escolha manual do especialista.
-5. **Teste seguro no 1º ticket:** marque **“Parar antes de enviar”** e clique em “Preparar e parar antes do envio”. O robô abre o primeiro ticket da fila, preenche e confere a mensagem, destaca “Responder privado” em vermelho e encerra sem clicar. Isso vale mesmo com “Envio real” marcado. A trava fica salva até você desmarcá-la, e só pode ser desligada com a fila parada.
-6. **Simular a fila toda:** deixe “Simulação” marcado e clique em “Simular fila”. O robô percorre todas as linhas, menos o clique em “Responder privado”. As linhas simuladas continuam disponíveis para o envio real.
-7. **Enviar:** desmarque a trava, marque “Envio real” e clique em “Iniciar envio”. Pausar, Retomar e Parar funcionam a qualquer momento.
+4. **Especialistas:** na seção “Especialistas”, digite cada nome e clique em “Adicionar”. Linhas com a coluna Tags vazia usam os nomes marcados; com mais de um marcado, os nomes se alternam em rodízio, na ordem da planilha. “Usar os marcados em todas as linhas” ignora a coluna Tags (útil para testar). Os nomes ficam salvos neste navegador.
+5. **Conferir a prévia:** clique em cada linha para ver o texto completo. Linhas “Revisar especialista” precisam da escolha manual do especialista.
+6. **Teste seguro no 1º ticket:** marque **“Parar antes de enviar”** e clique em “Preparar e parar antes do envio”. O robô abre o primeiro ticket da fila, preenche e confere a mensagem, destaca “Responder privado” em vermelho e encerra sem clicar. Isso vale mesmo com “Envio real” marcado. A trava fica salva até você desmarcá-la, e só pode ser desligada com a fila parada.
+7. **Simular a fila toda:** deixe “Simulação” marcado e clique em “Simular fila”. O robô percorre todas as linhas, menos o clique em “Responder privado”. As linhas simuladas continuam disponíveis para o envio real.
+8. **Enviar:** desmarque a trava, marque “Envio real” e clique em “Iniciar envio”. Pausar, Retomar e Parar funcionam a qualquer momento.
 
 ## Contrato da planilha
 
@@ -38,9 +39,10 @@ A leitura usa a **posição física** da célula (a referência `C5`, `Q5`…), 
 
 - **Cabeçalho:** detectado automaticamente como a primeira linha com C, Q, W e AA preenchidas (linha 4 no arquivo de referência). Pode ser ajustado no painel.
 - **Texto:** IDs e telefones são usados como texto. Números do Excel não viram notação científica, e um formato `00000000000` mantém o zero inicial. Só os espaços nas pontas são removidos.
-- **Telefone com `;`:** o conteúdo da célula entra inteiro no placeholder, na ordem original, em uma única mensagem. Exemplo fictício: `no número 11900000002;21900000003, sem sucesso.`
+- **Telefone com `;`:** o conteúdo da célula entra inteiro no placeholder, com 2, 3 ou mais números, na ordem original e com os espaços em volta do `;`, em uma única mensagem. Exemplo fictício: `no número 11900000010 ; 11900000011 ; 11900000012, sem sucesso.`
+- **Tags vazia:** a linha fica em **Revisar especialista** até haver um nome marcado na lista ou escolhido na própria linha. Não é mais tratada como incompleta.
 - **Tags:** um único nome vira o especialista, exatamente como está na célula. Com `;`, `,`, `|`, `/` ou quebra de linha, a linha fica em **Revisar especialista** e o operador escolhe. O robô nunca escolhe a primeira tag. Na planilha de referência só há tags simples, e “Quantidade de Tags” (Z) vale 0 mesmo com a tag preenchida, por isso Z não é usada como evidência.
-- **Linha incompleta** (algum dos quatro campos vazio) e **id origem repetido** não entram na fila. A prévia mostra o motivo.
+- **Linha incompleta** (Nome, id origem ou Telefone vazio) e **id origem repetido** não entram na fila. A prévia mostra o motivo.
 
 ## Fluxo de cada linha
 

@@ -141,6 +141,51 @@ function matchesTemplate(text, v) {
     eq(matchesTemplate(msg, { name: 'Rui Tags Ambiguas', specialist: 'Paula Modelo', phone: '41900000005' }), null);
     const r = await rowsText(page); eq(r.find(x => x[0] === '8')[5], 'Pendente');
   });
+  await test('Tags vazia: linha fica em revisão (não incompleta) e não inventa especialista', async () => {
+    const r = await rowsText(page); const at = n => r.find(x => x[0] === String(n));
+    for (const n of [13, 14, 15]) { eq(at(n)[5], 'Revisar especialista', 'linha ' + n); assert(at(n)[3].includes('escolher'), 'sem nome automático'); }
+    eq(at(13)[4], '11900000010 ; 11900000011 ; 11900000012', 'três telefones literais');
+  });
+  await test('Lista de especialistas: nomes marcados preenchem as linhas sem Tags em rodízio; Tags preenchida é mantida', async () => {
+    for (const n of ['Ana Teste', 'Bia Teste']) { await panel(page).locator('#specName').fill(n); await panel(page).locator('#specAdd').click(); }
+    const r = await rowsText(page); const at = n => r.find(x => x[0] === String(n));
+    eq([13, 14, 15].map(n => at(n)[3]).join('|'), '★ Ana Teste|★ Bia Teste|★ Ana Teste', 'rodízio na ordem da planilha');
+    eq([13, 14, 15].map(n => at(n)[5]).join('|'), 'Pendente|Pendente|Pendente');
+    eq(at(5)[3], 'Joana Exemplo', 'linha com Tags mantém a coluna AA');
+    await panel(page).locator('#tbody tr', { hasText: '100000009' }).click();
+    const msg = await panel(page).locator('#detail pre').textContent();
+    eq(matchesTemplate(msg, { name: 'Sem Tags Um', specialist: 'Ana Teste', phone: '11900000010 ; 11900000011 ; 11900000012' }), null, 'mensagem com 3 telefones e especialista da lista');
+    // Desmarcar um nome: o rodízio usa só os marcados.
+    await panel(page).locator('#specList input[type=checkbox]').nth(0).uncheck();
+    const r2 = await rowsText(page); eq([13, 14, 15].map(n => r2.find(x => x[0] === String(n))[3]).join('|'), '★ Bia Teste|★ Bia Teste|★ Bia Teste');
+    await panel(page).locator('#specList input[type=checkbox]').nth(0).check();
+  });
+  await test('Escolha por linha a partir da lista (✎) e "Voltar ao automático"', async () => {
+    await panel(page).locator('#tbody tr', { hasText: '100000010' }).click();
+    await panel(page).locator('#detail select').selectOption('Ana Teste');
+    await panel(page).locator('#detail button', { hasText: 'Aplicar' }).click();
+    let r = await rowsText(page); eq(r.find(x => x[0] === '14')[3], '✎ Ana Teste');
+    await panel(page).locator('#tbody tr', { hasText: '100000010' }).click();
+    await panel(page).locator('#detail button', { hasText: 'Voltar ao automático' }).click();
+    r = await rowsText(page); assert(r.find(x => x[0] === '14')[3].startsWith('★ '), 'voltou ao rodízio');
+  });
+  await test('"Usar os marcados em todas as linhas" substitui também as linhas com Tags', async () => {
+    await panel(page).locator('#specForce').check();
+    let r = await rowsText(page); assert(r.find(x => x[0] === '5')[3].startsWith('★ '), 'linha 5 deveria usar a lista: ' + r.find(x => x[0] === '5')[3]);
+    await panel(page).locator('#specForce').uncheck();
+    r = await rowsText(page); eq(r.find(x => x[0] === '5')[3], 'Joana Exemplo');
+    const saved = await page.evaluate(() => JSON.parse(localStorage.getItem('hugme-resposta-privada:v1')).cfg.specialists.map(x => x.name).join(','));
+    eq(saved, 'Ana Teste,Bia Teste', 'lista salva no navegador');
+  });
+  await test('Painel arrastável pela barra superior (posição salva)', async () => {
+    const b0 = await panel(page).boundingBox();
+    const bar = panel(page).locator('#drag b'); const bb = await bar.boundingBox();
+    await page.mouse.move(bb.x + 10, bb.y + 5); await page.mouse.down(); await page.mouse.move(bb.x - 290, bb.y + 105, { steps: 8 }); await page.mouse.up();
+    const b1 = await panel(page).boundingBox();
+    assert(Math.abs((b0.x - b1.x) - 300) < 3 && Math.abs((b1.y - b0.y) - 100) < 3, 'moveu ' + (b1.x - b0.x) + ',' + (b1.y - b0.y));
+    const pos = await page.evaluate(() => JSON.parse(localStorage.getItem('hugme-resposta-privada:v1')).cfg.pos);
+    assert(pos && Math.abs(pos.x - b1.x) < 2, 'posição salva');
+  });
   await page.close();
 
   const MAP = { '200000001': '900000101', '200000002': '900000102', '200000003': '900000103' };

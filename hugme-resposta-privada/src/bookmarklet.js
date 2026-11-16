@@ -74,17 +74,22 @@ function tagsInfo(raw) {
 
 // Fila: uma entrada por linha da planilha. Nada aqui toca o HugMe.
 // status: pendente | revisar | incompleta | duplicada | enviado | incerto (persistidos: enviado, incerto).
-function buildQueue(rows, headerRow, history = {}, overrides = {}) {
- const jobs = [], seen = new Map();
+// opts.pool: nomes marcados pelo operador; opts.force: usar o pool em todas as linhas (ignora Tags).
+// Linha sem Tags (ou com o pool forçado) recebe os nomes do pool em rodízio, na ordem da planilha. Sem pool, fica em revisão.
+function buildQueue(rows, headerRow, history = {}, overrides = {}, opts = {}) {
+ const jobs = [], seen = new Map(), pool = (opts.pool || []).map(n => String(n).trim()).filter(Boolean); let turn = 0;
  for (let i = headerRow; i < rows.length; i++) {
   const r = rows[i] || []; if (blankRow(r)) continue;
   const raw = { id: cellAt(r, 'C'), name: cellAt(r, 'Q'), phone: cellAt(r, 'W'), tags: cellAt(r, 'AA'), hugme: cellAt(r, 'A') };
   const j = { row: i + 1, id: raw.id.trim(), name: raw.name.trim(), phone: raw.phone.trim(), tags: raw.tags, hugme: raw.hugme.trim(), specialist: '', tagOptions: [], ambiguous: false, status: 'pendente', note: '' };
-  const missing = FIELDS.filter(f => !raw[f.key].trim()).map(f => '"' + f.informed + '" (' + f.letter + ')');
+  const missing = FIELDS.filter(f => f.key !== 'tags' && !raw[f.key].trim()).map(f => '"' + f.informed + '" (' + f.letter + ')');
   if (missing.length) { j.status = 'incompleta'; j.note = 'Vazio: ' + missing.join(', '); jobs.push(j); continue; }
   const t = tagsInfo(raw.tags); j.tagOptions = t.options; j.ambiguous = t.ambiguous;
-  j.specialist = t.ambiguous ? String(overrides[j.id] ?? '').trim() : t.value;
-  if (t.ambiguous && !j.specialist) { j.status = 'revisar'; j.note = 'Tags com mais de um nome: escolha o especialista desta linha'; }
+  const manual = String(overrides[j.id] ?? '').trim();
+  if (manual) { j.specialist = manual; j.source = 'manual'; }
+  else if (pool.length && (opts.force || !t.value && !t.ambiguous)) { j.specialist = pool[turn++ % pool.length]; j.source = 'lista'; }
+  else if (t.value) { j.specialist = t.value; j.source = 'tags'; }
+  if (!j.specialist) { j.status = 'revisar'; j.note = t.ambiguous ? 'Tags com mais de um nome: escolha o especialista desta linha' : 'Tags (AA) vazia: marque um especialista na lista ou escolha nesta linha'; }
   if (seen.has(j.id)) { j.status = 'duplicada'; j.note = 'id origem repetido (linha ' + seen.get(j.id) + ')'; jobs.push(j); continue; }
   seen.set(j.id, j.row);
   const h = history[j.id];
@@ -185,6 +190,7 @@ const KEY = 'hugme-resposta-privada:v1';
 const DEFAULTS = { timeout: 25, confirmTimeout: 30, betweenRows: 3, editorSelector: '', successSelector: '' };
 let stored; try { stored = JSON.parse(localStorage.getItem(KEY) || 'null') || {}; } catch { return alert('Histórico da Resposta privada ilegível no localStorage. Nada foi alterado.'); }
 let cfg = { ...DEFAULTS, ...(stored.cfg || {}) }, history = stored.history || {};
+cfg.specialists = Array.isArray(cfg.specialists) ? cfg.specialists.filter(x => x && typeof x.name === 'string' && x.name.trim()) : []; cfg.specForce = cfg.specForce === true;
 cfg.stopBeforeSend = cfg.stopBeforeSend === true; // trava de teste: persistida, desligada por padrão
 function readHistory() { try { history = (JSON.parse(localStorage.getItem(KEY) || 'null') || {}).history || {}; } catch {} return history; }
 function persist() { localStorage.setItem(KEY, JSON.stringify({ cfg, history })); }
@@ -202,7 +208,8 @@ root.innerHTML = `<style>
 *{box-sizing:border-box}
 .p{--bg:#101722;--card:#172231;--line:#33445a;--fg:#eef3f9;--mut:#a9b8ca;--acc:#73dfc6;--warn:#ffcf6b;--bad:#ff8b8b;--ok:#8be3a1;
 width:460px;max-width:calc(100vw - 24px);max-height:calc(100vh - 24px);overflow:auto;background:var(--bg);color:var(--fg);font:13px/1.45 system-ui,sans-serif;border:1px solid var(--line);border-radius:12px;box-shadow:0 12px 40px #0008}
-header{display:flex;align-items:center;gap:8px;padding:10px 14px;border-bottom:1px solid var(--line);position:sticky;top:0;background:var(--bg);z-index:2}
+header{display:flex;align-items:center;gap:8px;padding:10px 14px;border-bottom:1px solid var(--line);position:sticky;top:0;background:var(--bg);z-index:2;cursor:move;user-select:none;touch-action:none}header button{cursor:pointer}
+.spec{display:flex;gap:6px;align-items:center;padding:2px 0}.spec span{flex:1;color:var(--fg)}.spec button{padding:0 8px}
 header b{flex:1;font-size:14px}.badge{font-size:11px;padding:2px 8px;border-radius:99px;background:#24405a;color:var(--acc)}.badge.real{background:#5a2424;color:#ffd0d0}
 section{padding:10px 14px;border-bottom:1px solid var(--line)}h3{margin:0 0 6px;font-size:12px;letter-spacing:.06em;text-transform:uppercase;color:var(--acc)}
 button{font:inherit;cursor:pointer;border:1px solid var(--line);background:var(--card);color:var(--fg);padding:6px 10px;border-radius:8px}button:hover{border-color:var(--acc)}button:disabled{opacity:.45;cursor:not-allowed}
@@ -220,11 +227,16 @@ details summary{cursor:pointer;color:var(--mut)}label{display:inline-flex;gap:4p
 .seg label{border:1px solid var(--line);padding:4px 8px;border-radius:8px}.seg input{margin:0}
 </style>
 <div class="p" role="dialog" aria-label="HugMe Resposta privada">
-<header><b>HugMe · Resposta privada RA</b><span id="modeBadge" class="badge">Simulação</span><button id="close" aria-label="Fechar painel">×</button></header>
+<header id="drag" title="Arraste para mover o painel"><b>HugMe · Resposta privada RA</b><span id="modeBadge" class="badge">Simulação</span><button id="close" aria-label="Fechar painel">×</button></header>
 <section><h3>1 · Planilha</h3>
 <div class="row"><input id="file" type="file" accept=".xlsx"><select id="sheet" hidden aria-label="Aba"></select></div>
 <div class="row"><label>Linha do cabeçalho <input id="headerRow" type="number" min="1" style="width:64px"></label><span id="fileInfo" class="mut"></span></div>
 <div id="cols"></div></section>
+<section><h3>Especialistas</h3>
+<div class="row"><input id="specName" placeholder="Nome do especialista" aria-label="Nome do especialista" style="flex:1"><button id="specAdd">Adicionar</button></div>
+<div id="specList" class="mut">Nenhum nome cadastrado.</div>
+<div class="row"><label><input id="specForce" type="checkbox"> Usar os marcados em todas as linhas (ignora a coluna Tags)</label></div>
+<div class="mut">Linhas com Tags vazia usam os nomes marcados. Com mais de um marcado, o robô alterna os nomes em rodízio, na ordem da planilha. Para escolher só uma linha, clique nela na prévia.</div></section>
 <section><h3>2 · Prévia</h3><div id="summary" class="mut">Importe a planilha.</div>
 <div class="scroll" id="tableWrap" hidden><table><thead><tr><th>Linha</th><th>id origem</th><th>Nome</th><th>Especialista</th><th>Telefone</th><th>Situação</th></tr></thead><tbody id="tbody"></tbody></table></div>
 <div id="detail"></div></section>
@@ -281,7 +293,7 @@ function loadSheet() {
  status('Planilha carregada · confira colunas e prévia', 'ok');
 }
 function refresh() {
- renderCols(); jobs = buildQueue(rows, headerRow, readHistory(), overrides); renderTable(); renderDetail(); renderHistory(); updateControls();
+ renderCols(); jobs = buildQueue(rows, headerRow, readHistory(), overrides, { pool: cfg.specialists.filter(x => x.on).map(x => x.name), force: cfg.specForce }); renderTable(); renderDetail(); renderHistory(); updateControls();
 }
 function renderCols() {
  const rep = headerReport(rows, headerRow);
@@ -291,8 +303,8 @@ function renderCols() {
    h('td', { className: 'mut', textContent: c.use || 'confirmação do ticket (URL)' }))))));
 }
 function cellSpecialist(j) {
- if (!j.ambiguous) return j.specialist;
- return (j.specialist ? '✎ ' + j.specialist : '⚠ escolher') ;
+ if (!j.specialist) return '⚠ escolher';
+ return ({ manual: '✎ ', lista: '★ ' }[j.source] || '') + j.specialist;
 }
 function renderTable() {
  const s = summarize(jobs);
@@ -301,7 +313,7 @@ function renderTable() {
  $('tbody').replaceChildren(...jobs.map((j, i) => {
   const cls = { enviado: 'ok', simulado: 'ok', pronto: 'ok', incerto: 'warn', revisar: 'warn', incompleta: 'bad', duplicada: 'bad', falha: 'bad', pulada: 'mut' }[j.status] || '';
   const tr = h('tr', { className: selected === i ? 'sel' : '', tabIndex: 0 }, h('td', { textContent: j.row }), h('td', { textContent: j.id }), h('td', { textContent: j.name }),
-   h('td', { className: j.ambiguous && !j.specialist ? 'warn' : '', textContent: cellSpecialist(j) }), h('td', { textContent: j.phone }), h('td', { className: cls, textContent: STATUS_LABEL[j.status] || j.status }));
+   h('td', { className: !j.specialist ? 'warn' : '', title: { manual: 'escolhido nesta linha', lista: 'da lista de especialistas', tags: 'da coluna Tags' }[j.source] || '', textContent: cellSpecialist(j) }), h('td', { textContent: j.phone }), h('td', { className: cls, textContent: STATUS_LABEL[j.status] || j.status }));
   tr.onclick = () => { selected = i; renderTable(); renderDetail(); };
   tr.onkeydown = e => { if (e.key === 'Enter') tr.onclick(); };
   return tr;
@@ -312,17 +324,20 @@ function renderDetail() {
  if (!j) { box.replaceChildren(h('p', { className: 'mut', textContent: jobs.length ? 'Clique numa linha para ver a mensagem completa.' : '' })); return; }
  const kids = [h('div', { className: 'mut', textContent: 'Linha ' + j.row + ' · id origem ' + j.id + (j.hugme ? ' · Id HugMe ' + j.hugme : '') }),
   h('div', {}, 'Nome: ', h('b', { textContent: j.name || '(vazio)' }), ' · Telefone: ', h('b', { textContent: j.phone || '(vazio)' })),
-  h('div', {}, 'Tags (AA): ', h('b', { textContent: j.tags || '(vazio)' }))];
+  h('div', {}, 'Tags (AA): ', h('b', { textContent: j.tags || '(vazio)' }), j.specialist ? ' · Especialista: ' : '', j.specialist ? h('b', { textContent: j.specialist + ' (' + ({ manual: 'escolhido nesta linha', lista: 'da lista', tags: 'da coluna Tags' }[j.source]) + ')' }) : '')];
  if (j.note) kids.push(h('div', { className: j.status === 'incompleta' || j.status === 'duplicada' ? 'bad' : 'warn', textContent: j.note }));
- if (j.ambiguous && !busy && !['enviado', 'incerto'].includes(j.status)) {
-  const sel = h('select', { ariaLabel: 'Especialista desta linha' }, h('option', { value: '', textContent: '— escolher especialista —' }), j.tagOptions.map(o => h('option', { value: o, textContent: o })), h('option', { value: '__outro', textContent: 'Outro nome…' }));
+ if (!busy && !['enviado', 'incerto', 'incompleta', 'duplicada'].includes(j.status)) {
+  const names = [...new Set([...j.tagOptions, ...cfg.specialists.map(x => x.name)])];
+  const sel = h('select', { ariaLabel: 'Especialista desta linha' }, h('option', { value: '', textContent: '— escolher especialista —' }), names.map(o => h('option', { value: o, textContent: o })), h('option', { value: '__outro', textContent: 'Outro nome…' }));
   const other = h('input', { placeholder: 'nome do especialista', hidden: true });
-  sel.value = j.tagOptions.includes(j.specialist) ? j.specialist : j.specialist ? '__outro' : '';
+  sel.value = names.includes(j.specialist) ? j.specialist : j.specialist ? '__outro' : '';
   if (sel.value === '__outro') { other.hidden = false; other.value = j.specialist; }
   sel.onchange = () => { other.hidden = sel.value !== '__outro'; };
   const apply = h('button', { textContent: 'Aplicar a esta linha' });
   apply.onclick = guard(() => { const v = (sel.value === '__outro' ? other.value : sel.value).trim(); if (!v) throw Error('Escolha ou digite o especialista desta linha'); overrides[j.id] = v; log('Linha ' + j.row + ': especialista revisado → ' + v); refresh(); });
-  kids.push(h('div', { className: 'row' }, 'Especialista:', sel, other, apply));
+  const auto = h('button', { textContent: 'Voltar ao automático', hidden: j.source !== 'manual' });
+  auto.onclick = guard(() => { delete overrides[j.id]; log('Linha ' + j.row + ': especialista volta ao automático'); refresh(); });
+  kids.push(h('div', { className: 'row' }, 'Especialista desta linha:', sel, other, apply, auto));
  }
  kids.push(j.message ? h('pre', { textContent: j.message }) : h('p', { className: 'mut', textContent: 'Mensagem indisponível até a linha ficar completa.' }));
  box.replaceChildren(...kids);
@@ -359,6 +374,35 @@ function updateControls() {
  $('pause').disabled = !busy || paused; $('stop').disabled = !busy;
  $('file').disabled = busy; $('headerRow').disabled = busy; $('sheet').disabled = busy;
 }
+function renderSpecs() {
+ $('specForce').checked = cfg.specForce;
+ if (!cfg.specialists.length) { $('specList').replaceChildren('Nenhum nome cadastrado.'); return; }
+ $('specList').replaceChildren(...cfg.specialists.map((x, i) => {
+  const box = h('input', { type: 'checkbox', checked: x.on, ariaLabel: 'Usar ' + x.name }), del = h('button', { textContent: '×', title: 'Remover ' + x.name, ariaLabel: 'Remover ' + x.name });
+  box.onchange = guard(() => { if (busy) { box.checked = x.on; throw Error('Pare a execução antes de mudar os especialistas'); } x.on = box.checked; persist(); if (rows) refresh(); });
+  del.onclick = guard(() => { if (busy) throw Error('Pare a execução antes de mudar os especialistas'); cfg.specialists.splice(i, 1); persist(); renderSpecs(); if (rows) refresh(); });
+  return h('label', { className: 'spec' }, box, h('span', { textContent: x.name }), del);
+ }));
+}
+$('specAdd').onclick = guard(() => {
+ if (busy) throw Error('Pare a execução antes de mudar os especialistas');
+ const name = $('specName').value.trim(); if (!name) throw Error('Digite o nome do especialista');
+ if (cfg.specialists.some(x => x.name === name)) throw Error('Esse nome já está na lista');
+ cfg.specialists.push({ name, on: true }); $('specName').value = ''; persist(); renderSpecs(); if (rows) refresh(); log('Especialista adicionado: ' + name);
+});
+$('specName').onkeydown = e => { if (e.key === 'Enter') $('specAdd').click(); };
+$('specForce').onchange = guard(() => { if (busy) { $('specForce').checked = cfg.specForce; throw Error('Pare a execução antes'); } cfg.specForce = $('specForce').checked; persist(); if (rows) refresh(); });
+renderSpecs();
+// Arrastar o painel pela barra superior; a posição fica salva neste navegador.
+(function drag() {
+ const bar = $('drag'); let sx, sy, ox, oy, moving = false;
+ const place = (x, y) => { const r = host.getBoundingClientRect(); x = Math.min(Math.max(0, x), Math.max(0, innerWidth - Math.min(r.width, innerWidth))); y = Math.min(Math.max(0, y), Math.max(0, innerHeight - 40)); host.style.left = x + 'px'; host.style.top = y + 'px'; host.style.right = 'auto'; };
+ if (cfg.pos && Number.isFinite(cfg.pos.x)) place(cfg.pos.x, cfg.pos.y);
+ bar.onpointerdown = e => { if (e.button !== 0 || e.target.closest('button')) return; const r = host.getBoundingClientRect(); sx = e.clientX; sy = e.clientY; ox = r.left; oy = r.top; moving = true; bar.setPointerCapture(e.pointerId); e.preventDefault(); };
+ bar.onpointermove = e => { if (moving) place(ox + e.clientX - sx, oy + e.clientY - sy); };
+ bar.onpointerup = bar.onpointercancel = e => { if (!moving) return; moving = false; const r = host.getBoundingClientRect(); cfg.pos = { x: r.left, y: r.top }; persist(); };
+ bar.ondblclick = e => { if (e.target.closest('button')) return; host.style.left = ''; host.style.top = '12px'; host.style.right = '12px'; delete cfg.pos; persist(); };
+})();
 $('stopBeforeSend').onchange = guard(() => {
  const on = $('stopBeforeSend').checked;
  if (!on && busy) { $('stopBeforeSend').checked = true; throw Error('Para desligar a trava, pare a execução antes'); }

@@ -1,6 +1,6 @@
 # Resultado dos testes automatizados
 
-Gerado por `node tests/run-tests.cjs` em 2026-11-16T22:38:30.425Z. Nenhuma mensagem real foi enviada: o HugMe é a página simulada `tests/mock-hugme.html`.
+Gerado por `node tests/run-tests.cjs` em 2026-11-16T22:48:17.723Z. Nenhuma mensagem real foi enviada: o HugMe é a página simulada `tests/mock-hugme.html`.
 
 | Resultado | Teste |
 |---|---|
@@ -14,6 +14,11 @@ Gerado por `node tests/run-tests.cjs` em 2026-11-16T22:38:30.425Z. Nenhuma mensa
 | OK | Planilha de casos: cabeçalho na linha 4, grafias encontradas e vínculo pela letra |
 | OK | Planilha de casos: colunas intermediárias vazias, telefone numérico com zero à esquerda, linhas incompletas/duplicadas |
 | OK | Tags ambígua: não escolhe a primeira; operador escolhe e a mensagem usa o nome nas duas posições |
+| OK | Tags vazia: linha fica em revisão (não incompleta) e não inventa especialista |
+| OK | Lista de especialistas: nomes marcados preenchem as linhas sem Tags em rodízio; Tags preenchida é mantida |
+| OK | Escolha por linha a partir da lista (✎) e "Voltar ao automático" |
+| OK | "Usar os marcados em todas as linhas" substitui também as linhas com Tags |
+| OK | Painel arrastável pela barra superior (posição salva) |
 | OK | Simulação: percorre a fila até o passo #4 sem clicar em "Responder privado" |
 | OK | Envio (simulado no mock): um clique por ticket, texto do ng-model = modelo literal, dois telefones numa mensagem |
 | OK | Troca de ticket em andamento: espera o conteúdo novo, nunca age no ticket anterior |

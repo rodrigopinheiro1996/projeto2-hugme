@@ -28,6 +28,9 @@ put(ws, 10, {'A': 900000006, 'C': '100000001', 'Q': 'Repetida Ficticia', 'W': '6
 ws['W11'] = 1190000008; ws['W11'].number_format = '00000000000'
 put(ws, 11, {'A': 900000007, 'C': '100000007', 'Q': 'Numero Com Zero', 'AA': 'Paula Modelo'})
 put(ws, 12, {'A': 900000008, 'C': '100000008', 'Q': 'Dolar $1 Ficticio', 'W': '71900000009', 'AA': 'Joana Exemplo'})
+put(ws, 13, {'A': 900000009, 'C': '100000009', 'Q': 'Sem Tags Um', 'W': '11900000010 ; 11900000011 ; 11900000012', 'AA': None})
+put(ws, 14, {'A': 900000010, 'C': '100000010', 'Q': 'Sem Tags Dois', 'W': '11900000013 ; 11900000014'})
+put(ws, 15, {'A': 900000011, 'C': '100000011', 'Q': 'Sem Tags Tres', 'W': '11900000015'})
 wb.save(os.path.join(OUT, 'casos.xlsx'))
 
 wb, ws = base()

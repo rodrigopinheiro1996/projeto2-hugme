@@ -31,8 +31,9 @@ a:focus-visible,textarea:focus-visible,summary:focus-visible{outline:3px solid #
 <h2>Como usar</h2>
 <ol>
 <li><b>Instalar:</b> arraste o botão para a barra de favoritos (Ctrl+Shift+B mostra a barra).</li>
-<li><b>Abrir:</b> entre em <code>app.hugme.com.br</code> com seu login e abra qualquer tela de tickets. Clique no favorito: o painel aparece à direita.</li>
+<li><b>Abrir:</b> entre em <code>app.hugme.com.br</code> com seu login e abra qualquer tela de tickets. Clique no favorito: o painel aparece à direita. Arraste-o pela barra superior.</li>
 <li><b>Importar:</b> em “1 · Planilha”, escolha o arquivo <code>.xlsx</code>. A leitura acontece só no seu navegador. Confira na tabela de colunas a grafia encontrada para C, Q, W e AA.</li>
+<li><b>Especialistas:</b> adicione os nomes na seção “Especialistas”. Linhas com Tags vazia usam os marcados (em rodízio, se houver mais de um).</li>
 <li><b>Conferir a prévia:</b> clique em cada linha para ver a mensagem completa. Linhas “Revisar especialista” têm mais de um nome em Tags: escolha o especialista e clique em “Aplicar a esta linha”.</li>
 <li><b>Teste seguro:</b> marque <b>“Parar antes de enviar”</b>. O robô prepara a mensagem no 1º ticket da fila, destaca “Responder privado” em vermelho e encerra sem clicar, mesmo no Envio real.</li>
 <li><b>Simular:</b> com “Simulação” marcado, clique em “Simular fila”. O robô pesquisa o ticket, abre a Resposta privada, carrega “Busca por contato” e preenche o texto, mas não clica em “Responder privado”.</li>
