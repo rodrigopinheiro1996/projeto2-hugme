@@ -20,8 +20,9 @@ Favorito que lê uma planilha `.xlsx` no navegador e envia, um ticket por vez, a
 2. **Abrir o painel:** entre no HugMe (`app.hugme.com.br`) com seu login, abra a tela de tickets e clique no favorito.
 3. **Importar:** em “1 · Planilha”, escolha o `.xlsx`. Confira a tabela de colunas: ela mostra a grafia encontrada no arquivo para C, Q, W e AA.
 4. **Conferir a prévia:** clique em cada linha para ver o texto completo. Linhas “Revisar especialista” precisam da escolha manual do especialista.
-5. **Simular:** deixe “Simulação” marcado e clique em “Simular fila”. O robô faz tudo, menos clicar em “Responder privado”.
-6. **Enviar:** marque “Envio real” e clique em “Iniciar envio”. Pausar, Retomar e Parar funcionam a qualquer momento.
+5. **Teste seguro no 1º ticket:** marque **“Parar antes de enviar”** e clique em “Preparar e parar antes do envio”. O robô abre o primeiro ticket da fila, preenche e confere a mensagem, destaca “Responder privado” em vermelho e encerra sem clicar. Isso vale mesmo com “Envio real” marcado. A trava fica salva até você desmarcá-la, e só pode ser desligada com a fila parada.
+6. **Simular a fila toda:** deixe “Simulação” marcado e clique em “Simular fila”. O robô percorre todas as linhas, menos o clique em “Responder privado”. As linhas simuladas continuam disponíveis para o envio real.
+7. **Enviar:** desmarque a trava, marque “Envio real” e clique em “Iniciar envio”. Pausar, Retomar e Parar funcionam a qualquer momento.
 
 ## Contrato da planilha
 
@@ -60,7 +61,7 @@ Os testes rodaram numa página simulada com a mesma estrutura dos quatro JS Path
 | Ponto | Passo | O que o robô supõe | Captura, se falhar |
 |---|---|---|---|
 | Disparo da pesquisa | Passo #1 | Enter no `#input-id-reclamacao` abre o ticket e a URL mostra o Id HugMe | Gravação ou descrição do que acontece ao pesquisar; *outerHTML* do campo e do botão de pesquisa, se houver |
-| Editor da mensagem | Editor (sem JS Path no mapa) | Há um único `textarea` ou `contenteditable` visível dentro de `ticket-view-response[type="'ra-private-reply'"]` | No HugMe: Resposta privada → botão direito no campo do texto → Inspecionar → no elemento: *Copy JS path* e *Copy outerHTML* |
+| Editor da mensagem | Editor (sem JS Path no mapa) | Há um único editor visível dentro de `ticket-view-response[type="'ra-private-reply'"]`. O `ng-disabled` do botão de envio (`tiqt.message === '<p><br></p>'`) mostra que é um editor de texto rico em HTML: o robô grava um parágrafo com as linhas separadas por `<br>`. Também aceita `textarea` | No HugMe: Resposta privada → botão direito no campo do texto → Inspecionar → no elemento: *Copy JS path* e *Copy outerHTML* |
 | Sinal de sucesso | Passo #4 | O texto enviado aparece no ticket depois do clique | *outerHTML* do aviso ou da mensagem que aparece depois de um envio real |
 
 Com a captura em mãos, os seletores do editor e do sinal de sucesso podem ser salvos em **Ajustes avançados**, sem mudar os quatro JS Paths.

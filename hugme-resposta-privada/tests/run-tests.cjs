@@ -154,7 +154,9 @@ function matchesTemplate(text, v) {
     eq(ev.filter(t => t === 'modelClick').length, 3, 'modelo clicado em cada ticket');
     const r = await rowsText(p); assert(r.every(x => x[5] === 'Simulado'), 'todas simuladas: ' + JSON.stringify(r.map(x => x[5])));
     const ta = await p.evaluate(() => document.querySelector('textarea').value); eq(matchesTemplate(ta, ROW['900000103']), null, 'editor do último ticket');
+    // Depois da simulação, o envio real usa as mesmas linhas (nada foi enviado nelas).
     eq(await p.evaluate(() => JSON.stringify((JSON.parse(localStorage.getItem('hugme-resposta-privada:v1') || '{}').history) || {})), '{}', 'simulação não grava histórico');
+    await runAndWait(p, 'enviar', idle); eq((await p.evaluate(() => window.__sent)).length, 3, 'envio real após simulação');
     await p.close();
   });
   await test('Envio (simulado no mock): um clique por ticket, texto do ng-model = modelo literal, dois telefones numa mensagem', async () => {
@@ -211,6 +213,35 @@ function matchesTemplate(text, v) {
     const sent = await p.evaluate(() => window.__sent.map(s => s.ticket));
     eq(sent.join(','), '900000101,900000102,900000103', 'linha incerta não reenviada');
     const r2 = await rowsText(p); eq(r2.map(x => x[5]).join('|'), 'Verificar envio|Enviado (confirmado)|Enviado (confirmado)');
+    await p.close();
+  });
+
+  // HTML do editor rico -> texto (cada <br> vira quebra de linha; parágrafos idem).
+  const htmlText = h => h.replace(/<br\s*\/?>/gi, '\n').replace(/<\/p>\s*<p[^>]*>/gi, '\n').replace(/<[^>]+>/g, '').replace(/&nbsp;/g, ' ').replace(/&lt;/g, '<').replace(/&gt;/g, '>').replace(/&quot;/g, '"').replace(/&#39;/g, "'").replace(/&amp;/g, '&');
+  await test('Editor de texto rico (tiqt.message em HTML): mensagem literal com quebras de linha, dois telefones', async () => {
+    const p = await openHugMe({ map: MAP, editor: 'rich' });
+    await load(p, 'fluxo.xlsx'); await runAndWait(p, 'enviar', idle);
+    const sent = await p.evaluate(() => window.__sent);
+    eq(sent.length, 3);
+    for (const s of sent) { assert(s.html, 'deveria ser HTML'); eq(matchesTemplate(htmlText(s.message), ROW[s.ticket]), null, 'ticket ' + s.ticket); }
+    await p.close();
+  });
+  for (const editor of ['textarea', 'rich']) await test('Trava "Parar antes de enviar" (' + editor + ', modo Envio real): prepara o 1º ticket, destaca o botão e encerra sem clicar', async () => {
+    const p = await openHugMe({ map: MAP, editor });
+    await load(p, 'fluxo.xlsx');
+    await panel(p).locator('#stopBeforeSend').check();
+    eq(await panel(p).locator('#start').textContent(), 'Preparar e parar antes do envio');
+    await runAndWait(p, 'enviar', idle);
+    eq((await p.evaluate(() => window.__sent)).length, 0, 'nenhum clique em Responder privado');
+    const r = await rowsText(p); eq(r.map(x => x[5]).join('|'), 'Pronto · parado antes do envio|Pendente|Pendente');
+    const ed = await p.evaluate(e => { const el = e === 'rich' ? document.querySelector('[contenteditable]') : document.querySelector('textarea'); return e === 'rich' ? el.innerHTML : el.value; }, editor);
+    eq(matchesTemplate(editor === 'rich' ? htmlText(ed) : ed, ROW['900000101']), null, 'mensagem pronta no editor');
+    assert(await p.evaluate(() => /solid/.test(document.querySelector("ticket-view-response[type=\"'ra-private-reply'\"] > div.response-container > div.buttons-response > button.btn-undo").style.outline)), 'botão destacado');
+    assert((await panel(p).locator('#status').textContent()).includes('ANTES do envio'), 'status informa a parada');
+    eq(await p.evaluate(() => JSON.stringify((JSON.parse(localStorage.getItem('hugme-resposta-privada:v1') || '{}').history) || {})), '{}', 'nada no histórico');
+    // Persistida e só desligável com a fila parada; desligada, o envio volta a acontecer.
+    await panel(p).locator('#stopBeforeSend').uncheck(); await runAndWait(p, 'enviar', idle);
+    eq((await p.evaluate(() => window.__sent)).length, 3, 'sem a trava, envia as 3 linhas');
     await p.close();
   });
 

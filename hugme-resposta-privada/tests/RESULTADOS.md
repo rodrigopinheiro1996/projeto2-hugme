@@ -1,6 +1,6 @@
 # Resultado dos testes automatizados
 
-Gerado por `node tests/run-tests.cjs` em 2026-11-16T22:11:40.745Z. Nenhuma mensagem real foi enviada: o HugMe é a página simulada `tests/mock-hugme.html`.
+Gerado por `node tests/run-tests.cjs` em 2026-11-16T22:38:30.425Z. Nenhuma mensagem real foi enviada: o HugMe é a página simulada `tests/mock-hugme.html`.
 
 | Resultado | Teste |
 |---|---|
@@ -19,3 +19,6 @@ Gerado por `node tests/run-tests.cjs` em 2026-11-16T22:11:40.745Z. Nenhuma mensa
 | OK | Troca de ticket em andamento: espera o conteúdo novo, nunca age no ticket anterior |
 | OK | Ticket divergente: diagnóstico com linha, id e passo; nada é clicado; pular segue a fila |
 | OK | Sem confirmação após o clique final: "Verificar envio", fila pausada e sem reenvio automático |
+| OK | Editor de texto rico (tiqt.message em HTML): mensagem literal com quebras de linha, dois telefones |
+| OK | Trava "Parar antes de enviar" (textarea, modo Envio real): prepara o 1º ticket, destaca o botão e encerra sem clicar |
+| OK | Trava "Parar antes de enviar" (rich, modo Envio real): prepara o 1º ticket, destaca o botão e encerra sem clicar |

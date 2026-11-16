@@ -96,7 +96,9 @@ function buildQueue(rows, headerRow, history = {}, overrides = {}) {
 }
 function fmtDate(iso) { try { return new Date(iso).toLocaleString('pt-BR'); } catch { return String(iso); } }
 function summarize(jobs) { const s = {}; for (const j of jobs) s[j.status] = (s[j.status] || 0) + 1; return s; }
-const STATUS_LABEL = { pendente: 'Pendente', revisar: 'Revisar especialista', incompleta: 'Incompleta', duplicada: 'Duplicada', enviado: 'Enviado (confirmado)', incerto: 'Verificar envio', simulado: 'Simulado', falha: 'Falha (não enviado)', pulada: 'Pulada' };
+const STATUS_LABEL = { pendente: 'Pendente', revisar: 'Revisar especialista', incompleta: 'Incompleta', duplicada: 'Duplicada', enviado: 'Enviado (confirmado)', incerto: 'Verificar envio', simulado: 'Simulado', pronto: 'Pronto · parado antes do envio', falha: 'Falha (não enviado)', pulada: 'Pulada' };
+// Linhas que podem entrar na fila: nada foi enviado nelas (simulado/pronto/falha não clicaram em "Responder privado").
+const READY = ['pendente', 'falha', 'simulado', 'pronto'];
 // END CORE
 
 // BEGIN XLSX — leitor OOXML offline (adaptado do rod bot RA 2.0). Toda célula vira texto, como aparece no Excel para IDs e telefones.
@@ -183,12 +185,13 @@ const KEY = 'hugme-resposta-privada:v1';
 const DEFAULTS = { timeout: 25, confirmTimeout: 30, betweenRows: 3, editorSelector: '', successSelector: '' };
 let stored; try { stored = JSON.parse(localStorage.getItem(KEY) || 'null') || {}; } catch { return alert('Histórico da Resposta privada ilegível no localStorage. Nada foi alterado.'); }
 let cfg = { ...DEFAULTS, ...(stored.cfg || {}) }, history = stored.history || {};
+cfg.stopBeforeSend = cfg.stopBeforeSend === true; // trava de teste: persistida, desligada por padrão
 function readHistory() { try { history = (JSON.parse(localStorage.getItem(KEY) || 'null') || {}).history || {}; } catch {} return history; }
 function persist() { localStorage.setItem(KEY, JSON.stringify({ cfg, history })); }
 function setHistory(id, entry) { readHistory(); history[id] = { ...(history[id] || {}), ...entry, at: new Date().toISOString() }; persist(); }
 
 let workbook = null, rows = null, headerRow = null, jobs = [], overrides = {}, selected = null;
-let busy = false, paused = false, stopped = false, mode = 'simular', diag = null;
+let stoppedBeforeSend = null, busy = false, paused = false, stopped = false, mode = 'simular', diag = null;
 
 // ---------- Painel ----------
 const host = document.createElement('div'); host.id = 'hugme-privada-host';
@@ -213,6 +216,7 @@ pre{white-space:pre-wrap;background:#0c1420;border:1px solid var(--line);border-
 .diag{border:1px solid var(--bad);background:#2a1414;border-radius:8px;padding:8px;margin-top:6px}.diag.warn{border-color:var(--warn);background:#2a2414}
 #log{max-height:120px;overflow:auto;font:11px/1.4 ui-monospace,monospace;color:var(--mut);white-space:pre-wrap}
 details summary{cursor:pointer;color:var(--mut)}label{display:inline-flex;gap:4px;align-items:center}
+.safe{border:1px solid var(--warn);border-radius:8px;padding:6px 8px;align-items:flex-start}.safe input{margin-top:3px}
 .seg label{border:1px solid var(--line);padding:4px 8px;border-radius:8px}.seg input{margin:0}
 </style>
 <div class="p" role="dialog" aria-label="HugMe Resposta privada">
@@ -226,6 +230,7 @@ details summary{cursor:pointer;color:var(--mut)}label{display:inline-flex;gap:4p
 <div id="detail"></div></section>
 <section><h3>3 · Execução</h3>
 <div class="row seg" role="radiogroup" aria-label="Modo"><label><input type="radio" name="mode" value="simular" checked> Simulação (não clica em “Responder privado”)</label><label><input type="radio" name="mode" value="enviar"> Envio real</label></div>
+<div class="row"><label class="safe"><input id="stopBeforeSend" type="checkbox"> <span><b>Parar antes de enviar</b> · teste seguro: prepara a mensagem no 1º ticket da fila, destaca “Responder privado” e encerra sem clicar</span></label></div>
 <div class="row"><button id="start" class="pri">Simular fila</button><button id="pause" disabled>Pausar</button><button id="stop" disabled>Parar</button></div>
 <div id="status" class="mut">Pronto.</div><div id="diag"></div></section>
 <section><h3>4 · Histórico deste navegador</h3><div id="hist" class="mut"></div>
@@ -294,7 +299,7 @@ function renderTable() {
  $('summary').textContent = jobs.length + ' linha(s) · ' + Object.entries(s).map(([k, n]) => n + ' ' + (STATUS_LABEL[k] || k).toLowerCase()).join(' · ');
  $('tableWrap').hidden = !jobs.length;
  $('tbody').replaceChildren(...jobs.map((j, i) => {
-  const cls = { enviado: 'ok', simulado: 'ok', incerto: 'warn', revisar: 'warn', incompleta: 'bad', duplicada: 'bad', falha: 'bad', pulada: 'mut' }[j.status] || '';
+  const cls = { enviado: 'ok', simulado: 'ok', pronto: 'ok', incerto: 'warn', revisar: 'warn', incompleta: 'bad', duplicada: 'bad', falha: 'bad', pulada: 'mut' }[j.status] || '';
   const tr = h('tr', { className: selected === i ? 'sel' : '', tabIndex: 0 }, h('td', { textContent: j.row }), h('td', { textContent: j.id }), h('td', { textContent: j.name }),
    h('td', { className: j.ambiguous && !j.specialist ? 'warn' : '', textContent: cellSpecialist(j) }), h('td', { textContent: j.phone }), h('td', { className: cls, textContent: STATUS_LABEL[j.status] || j.status }));
   tr.onclick = () => { selected = i; renderTable(); renderDetail(); };
@@ -346,23 +351,30 @@ for (const r of root.querySelectorAll('input[name=mode]')) r.onchange = guard(()
  mode = root.querySelector('input[name=mode]:checked').value; updateControls();
 });
 function updateControls() {
- $('modeBadge').textContent = mode === 'enviar' ? 'ENVIO REAL' : 'Simulação'; $('modeBadge').className = 'badge' + (mode === 'enviar' ? ' real' : '');
- $('start').textContent = busy ? (paused ? 'Retomar' : 'Em execução…') : mode === 'enviar' ? 'Iniciar envio' : 'Simular fila';
- $('start').className = mode === 'enviar' ? 'danger' : 'pri';
+ const safe = cfg.stopBeforeSend; $('stopBeforeSend').checked = safe;
+ $('modeBadge').textContent = safe ? 'Para antes do envio' : mode === 'enviar' ? 'ENVIO REAL' : 'Simulação'; $('modeBadge').className = 'badge' + (mode === 'enviar' && !safe ? ' real' : '');
+ $('start').textContent = busy ? (paused ? 'Retomar' : 'Em execução…') : safe ? 'Preparar e parar antes do envio' : mode === 'enviar' ? 'Iniciar envio' : 'Simular fila';
+ $('start').className = mode === 'enviar' && !safe ? 'danger' : 'pri';
  $('start').disabled = busy && !paused || !rows;
  $('pause').disabled = !busy || paused; $('stop').disabled = !busy;
  $('file').disabled = busy; $('headerRow').disabled = busy; $('sheet').disabled = busy;
 }
+$('stopBeforeSend').onchange = guard(() => {
+ const on = $('stopBeforeSend').checked;
+ if (!on && busy) { $('stopBeforeSend').checked = true; throw Error('Para desligar a trava, pare a execução antes'); }
+ cfg.stopBeforeSend = on; persist(); updateControls();
+ log(on ? 'Trava ligada: a fila para antes de "Responder privado"' : 'Trava desligada'); status(on ? 'Trava ligada: nada será enviado' : 'Trava desligada', on ? 'ok' : 'warn');
+});
 $('close').onclick = () => { if (busy && !confirm('A fila está em execução. Parar e fechar o painel?')) return; stopped = true; host.remove(); delete window.__hugmePrivada; };
 $('pause').onclick = () => { paused = true; status('Pausado · clique em Retomar', 'warn'); log('Pausado pelo operador'); updateControls(); };
 $('stop').onclick = () => { stopped = true; paused = false; status('Parando…', 'warn'); log('Parada solicitada'); updateControls(); };
 $('start').onclick = guard(async () => {
  if (busy && paused) { paused = false; status('Retomando…'); log('Retomado'); updateControls(); return; }
  if (busy || !rows) return;
- const queue = jobs.filter(j => j.status === 'pendente' || j.status === 'falha');
+ const queue = jobs.filter(j => READY.includes(j.status));
  const review = jobs.filter(j => j.status === 'revisar').length;
  if (!queue.length) throw Error(review ? 'Nenhuma linha pronta: ' + review + ' linha(s) aguardam a escolha do especialista' : 'Nenhuma linha pendente na fila');
- if (mode === 'enviar' && !confirm('ENVIO REAL: enviar ' + queue.length + ' resposta(s) privada(s), uma por ticket?' + (review ? '\n' + review + ' linha(s) em revisão ficarão de fora.' : '') + '\nVocê pode pausar ou parar a qualquer momento.')) return;
+ if (mode === 'enviar' && !cfg.stopBeforeSend && !confirm('ENVIO REAL: enviar ' + queue.length + ' resposta(s) privada(s), uma por ticket?' + (review ? '\n' + review + ' linha(s) em revisão ficarão de fora.' : '') + '\nVocê pode pausar ou parar a qualquer momento.')) return;
  await runQueue(queue);
 });
 
@@ -430,7 +442,12 @@ function readEditor(e) { return (e.tagName === 'TEXTAREA' || e.tagName === 'INPU
 function writeEditor(e, text) {
  e.focus();
  if (e.tagName === 'TEXTAREA' || e.tagName === 'INPUT') { setNative(e, text); }
- else { e.replaceChildren(...text.split('\n').flatMap((l, i) => i ? [document.createElement('br'), document.createTextNode(l)] : [document.createTextNode(l)])); }
+ else {
+  // Editor de texto rico (o HugMe guarda HTML em tiqt.message; vazio = "<p><br></p>"): um parágrafo, linhas separadas por <br>.
+  const p = document.createElement('p');
+  p.append(...text.split('\n').flatMap((l, i) => i ? [document.createElement('br'), document.createTextNode(l)] : [document.createTextNode(l)]));
+  e.replaceChildren(p);
+ }
  for (const t of ['input', 'change', 'keyup']) e.dispatchEvent(new Event(t, { bubbles: true }));
  e.dispatchEvent(new Event('blur')); // AngularJS ng-model com updateOn blur
 }
@@ -506,9 +523,15 @@ async function processJob(j) {
  // Passo #4 · Responder privado
  const send = await wait(() => one('p4'), T, 'p4', 'o botão "Responder privado"');
  await wait(() => enabled(send), T, 'p4', 'o botão "Responder privado" habilitar');
- if (mode !== 'enviar') { log('Linha ' + j.row + ': SIMULAÇÃO · "Responder privado" não clicado'); return 'simulado'; }
  if (j.hugme && ticketInUrl() !== j.hugme) throw new StepError('p4', 'O ticket mudou antes do envio (' + ticketInUrl() + '). Nada foi enviado.');
  if (checkMessage(readEditor(findEditor() || ed), j)) throw new StepError('p4', 'A mensagem mudou no editor antes do envio. Nada foi enviado.');
+ // Trava de teste: lida no último instante antes do clique; vale também no Envio real.
+ if (cfg.stopBeforeSend) {
+  send.style.outline = '3px solid #ff5a5a'; send.style.outlineOffset = '3px'; send.scrollIntoView({ block: 'center' });
+  log('Linha ' + j.row + ': PARADO ANTES DO ENVIO · mensagem conferida no editor, "Responder privado" destacado e não clicado');
+  return 'pronto';
+ }
+ if (mode !== 'enviar') { log('Linha ' + j.row + ': SIMULAÇÃO · "Responder privado" não clicado'); return 'simulado'; }
  readHistory(); const prev = history[j.id]; if (prev && ['enviado', 'incerto'].includes(prev.status)) throw new StepError('p4', 'Este id origem já está no histórico como ' + STATUS_LABEL[prev.status] + ' (outra aba?). Nada foi enviado.');
  const snippet = 'no número ' + j.phone + ', sem sucesso';
  const evBefore = evidenceCount(snippet), okBefore = cfg.successSelector ? [...document.querySelectorAll(cfg.successSelector)].filter(visible).length : 0;
@@ -529,7 +552,7 @@ async function processJob(j) {
 }
 
 async function runQueue(queue) {
- busy = true; paused = false; stopped = false; diag = null; $('diag').replaceChildren(); updateControls(); renderDetail();
+ busy = true; paused = false; stopped = false; diag = null; stoppedBeforeSend = null; $('diag').replaceChildren(); updateControls(); renderDetail();
  const lock = 'hugme-resposta-privada:lock', me = Math.random().toString(36).slice(2);
  try {
   const other = JSON.parse(localStorage.getItem(lock) || 'null');
@@ -540,9 +563,10 @@ async function runQueue(queue) {
   try {
    for (let k = 0; k < queue.length; k++) {
     const j = queue[k];
-    if (j.status !== 'pendente' && j.status !== 'falha') continue;
+    if (!READY.includes(j.status)) continue;
     try {
-     j.status = await processJob(j); j.note = j.status === 'simulado' ? 'Simulação completa até o passo #4 (sem clique)' : 'Envio confirmado';
+     j.status = await processJob(j); j.note = j.status === 'simulado' ? 'Simulação completa até o passo #4 (sem clique)' : j.status === 'pronto' ? 'Mensagem pronta no editor; "Responder privado" não clicado (trava de teste)' : 'Envio confirmado';
+     if (j.status === 'pronto') { stoppedBeforeSend = j; break; }
     } catch (e) {
      if (e.stopped && !e.after) { log('Interrompido na linha ' + j.row); break; }
      const step = e.step || 'p1';
@@ -561,7 +585,7 @@ async function runQueue(queue) {
   } finally { clearInterval(beat); if (JSON.parse(localStorage.getItem(lock) || 'null')?.id === me) localStorage.removeItem(lock); }
  } finally {
   busy = false; paused = false; const s = summarize(jobs);
-  const doneMsg = stopped ? 'Parado pelo operador.' : diag?.after ? 'Fila pausada: verificar envio da linha ' + diag.row + '.' : 'Fila concluída.';
+  const doneMsg = stoppedBeforeSend ? 'Atividade encerrada ANTES do envio na linha ' + stoppedBeforeSend.row + ' (id origem ' + stoppedBeforeSend.id + '). Confira a mensagem no editor do HugMe; nada foi enviado. Se for descartar, apague o texto do editor.' : stopped ? 'Parado pelo operador.' : diag?.after ? 'Fila pausada: verificar envio da linha ' + diag.row + '.' : 'Fila concluída.';
   status(doneMsg + ' ' + Object.entries(s).map(([k, n]) => n + ' ' + (STATUS_LABEL[k] || k).toLowerCase()).join(' · '), diag?.after ? 'warn' : stopped ? 'warn' : 'ok');
   log(doneMsg); stopped = false; updateControls(); renderDetail(); renderHistory();
  }
